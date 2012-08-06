@@ -3,7 +3,7 @@
 #
 Application::Specification.new do |s|
   s.name       = 'WretchDL'
-  s.identifier = 'com.riddle.WretchDL'
+  s.identifier = 'com.lingdev.WretchDL'
 
   # The version of the app, usually including the build number.
   s.version    = '1.0'
