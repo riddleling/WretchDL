@@ -15,10 +15,10 @@ module HotCocoa
                 apple.item :quit, title: "Quit #{NSApp.name}", key: 'q'
             end
 
-            main.submenu :window do |win|
-                win.item :minimize, key: 'm'
-                win.item :zoom
-            end
+            #main.submenu :window do |win|
+            #    win.item :minimize, key: 'm'
+            #    win.item :zoom
+            #end
 
             main.submenu :help do |help|
                 help.item :help, title: "#{NSApp.name} Help"

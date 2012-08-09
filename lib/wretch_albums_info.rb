@@ -29,7 +29,7 @@
 require 'open-uri'
 
 ##
-# WretchPhotoURL Class
+#  WretchPhotoURL Class
 #
 class WretchPhotoURL
   attr_accessor :photo_url
@@ -55,7 +55,7 @@ end
 
 
 ##
-# WretchAlbum Class
+#  WretchAlbum Class
 #
 class WretchAlbum
   attr_accessor :id, :number, :name, :pictures, :cover_url
@@ -103,24 +103,27 @@ end
 
 
 ##
-# WretchAlbumsInfo Class
+#  WretchAlbumsInfo Class
 #
 class WretchAlbumsInfo
   attr_accessor :wretch_id
 
   def initialize(wretch_id)
     @wretch_id = wretch_id
+    @is_next_page = false
   end
 
-  def list_of_page(page_number)
+  def list_of_page(num)
+    @page_number = num
     wretch_url = "http://www.wretch.cc/album/#{@wretch_id}"
-    if page_number >= 2 
-      wretch_url << "&page=#{page_number}"
+    if @page_number >= 2 
+      wretch_url << "&page=#{@page_number}"
     end
 
     page_html = open(wretch_url).read
     albums = []
 
+    # get album number, name, and pictures number
     page_html.each_line do |line|
       if line =~ /<a href="\.\/album\.php\?id=#{@wretch_id}&book=(\d+)">(.+)<\/a>/
         albums << WretchAlbum.new(@wretch_id, Regexp.last_match[1], Regexp.last_match[2])
@@ -131,9 +134,13 @@ class WretchAlbumsInfo
       end
     end
     
+    # get cover url
     covers = {}
     page_html.each_line do |line|
       if line =~ %r!<img src="(http://.+/#{@wretch_id}/(\d+)/thumbs/.+)" border="0" alt="Cover"/>!
+        key = $2.to_sym
+        covers[key] = $1
+      elsif line =~ %r!<img src="(http://.+/#{@wretch_id.downcase}/(\d+)/thumbs/.+)" border="0" alt="Cover"/>!
         key = $2.to_sym
         covers[key] = $1
       end
@@ -143,6 +150,18 @@ class WretchAlbumsInfo
       key = a.number.to_sym
       a.cover_url = covers[key]
     end
+    
+    # Next page?
+    page_html.each_line do |line|
+      if line =~ %r!<a id='next' href="#{@wretch_id}&page=#{@page_number+1}" class="">!
+        @is_next_page = true
+        break
+      end
+    end
     albums
+  end
+  
+  def next_page?
+    @is_next_page
   end
 end
