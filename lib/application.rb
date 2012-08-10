@@ -1,5 +1,6 @@
 require 'rubygems' # disable this for a deployed application
 require 'hotcocoa'
+require 'fileutils'
 
 SOURCE_DIR = File.expand_path(File.dirname(__FILE__))
 require SOURCE_DIR + '/wretch_albums_info'
@@ -203,15 +204,78 @@ class WretchDL
         puts "Downloading..."
         if @table.selectedRow != -1
             i = @table.selectedRow
-            make_dl_dir(@albums[i].id, @albums[i].name)
+            home_path = NSHomeDirectory()
+            dl_dir_path = File.join(home_path, 'Downloads', 'WretchAlbums', @albums[i].id, @albums[i].name)
+            make_dl_dir(dl_dir_path)
+            
+            # start download files
+            @table.enabled = false
+            @download_button.title = "Stop!"
+            if not @download_progress.isIndeterminate
+                @download_progress.setIndeterminate(true)
+            end
+            @download_progress.show
+            @download_progress.start
+            
+            queue = Dispatch::Queue.new('com.lingdev.WretchDL.download_files')
+            queue.async do
+                urls = @albums[i].photos_urls
+                
+                Dispatch::Queue.main.async do
+                    @download_progress.minValue = 0.0
+                    @download_progress.maxValue = urls.size.to_f
+                    @download_progress.reset
+                    @download_progress.stop
+                    @download_progress.setIndeterminate(false)
+                end
+                
+                urls.each_with_index do |photo_url, steps|
+                    file_url = photo_url.to_file_url
+                    if not file_url.empty?
+                        download_file(file_url, dl_dir_path)
+                        Dispatch::Queue.main.async do
+                            @download_progress.value = steps + 1
+                        end
+                    end
+                    puts "sleep 1s"
+                    sleep 1
+                end
+                Dispatch::Queue.main.async do
+                    @download_progress.hide
+                    @table.enabled = true
+                    @download_button.title = "Download"
+                end
+            end
+                
         end
     end
     
-    def make_dl_dir(id_name, album_name)
-        home_path = NSHomeDirectory()
-        dl_dir = File.join(home_path, 'Downloads', 'WretchAlbums', id_name, album_name)
-        puts "dl_dir: #{dl_dir}"
+    def download_file(file_url, dl_dir_path)
+        file_url =~ %r!http://.+/(.+\.jpg)?.+!
+        file_name = $1
+        referer_url = "http://www.wretch.cc/album/"
+        # "curl --referer #{referer_url} '#{file_url}' -o #{file_name}"
+    
+        task = NSTask.alloc.init
+        task.setLaunchPath("/usr/bin/curl")
+        task.setCurrentDirectoryPath(dl_dir_path)
+    
+        task_args = ["--referer", referer_url, file_url, "-o", file_name]
+        task.setArguments(task_args)
+    
+        task.launch
+        task.waitUntilExit
         
+        task_status = task.terminationStatus
+    
+        if task_status != 0
+            puts "Download fail!"
+        end
+    end
+    
+    def make_dl_dir(dir_path)
+        puts "dl_dir: #{dir_path}"
+        FileUtils.mkdir_p(dir_path)
     end
     
     def numberOfRowsInTableView(view)
