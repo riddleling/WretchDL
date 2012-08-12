@@ -68,19 +68,19 @@ class WretchAlbum
   def photos_urls
     album_url = "http://www.wretch.cc/album/album.php?id=#{@id}&book=#{@number}"
     i = 1
-    is_next_page = true
+    is_page_next = true
     urls = []
-    while is_next_page do
+    while is_page_next do
       page_html = open(album_url).read
     
       urls.concat(get_photo_url_list(page_html))
       i += 1
-      is_next_page = false
-      # Next Page?
+      is_page_next = false
+      # page next?
       page_html.each_line do |line|
         if line =~ /(album\.php\?id=#{@id}&book=#{@number}&page=#{i})/
           album_url = "http://www.wretch.cc/album/album.php?id=#{@id}&book=#{@number}&page=#{i}"
-          is_next_page = true
+          is_page_next = true
           break
         end
       end
@@ -110,7 +110,7 @@ class WretchAlbumsInfo
 
   def initialize(wretch_id)
     @wretch_id = wretch_id
-    @is_next_page = false
+    @is_page_next = false
   end
 
   def list_of_page(num)
@@ -151,17 +151,17 @@ class WretchAlbumsInfo
       a.cover_url = covers[key]
     end
     
-    # Next page?
+    # page next?
     page_html.each_line do |line|
       if line =~ %r!<a id='next' href="#{@wretch_id}&page=#{@page_number+1}" class="">!
-        @is_next_page = true
+        @is_page_next = true
         break
       end
     end
     albums
   end
   
-  def next_page?
-    @is_next_page
+  def page_next?
+    @is_page_next
   end
 end

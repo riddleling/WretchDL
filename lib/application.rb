@@ -12,12 +12,13 @@ class WretchDL
     def initialize
         @albums = []
         @pages_number = 0
+        @is_downloading = false
     end
 
     def start
         application name: 'WretchDL' do |app|
             app.delegate = self
-            window(size: [380, 430], center: true, title: 'WretchDL') do |win|
+            @window = window(size: [450, 430], center: true, title: 'WretchDL') do |win|
                 win.will_close { exit }
                 
                 # Setup top layout_view
@@ -35,7 +36,7 @@ class WretchDL
                     @search_progress.hide
                 end
                 win << top_view
-                @go_button.on_action { search_albums_list }
+                @go_button.on_action { search_albums }
                 
                 
                 # Setup center layout_view
@@ -86,7 +87,6 @@ class WretchDL
                                                         :expand => [:width]}) do |hori|
                             hori.spacing = 0
                             hori.margin = 2
-                             #hori << @pages_number_label = label(:text => "Page:1", :layout => {:expand => [:width], :align => :top})
                             hori << @page_up_button = button(:title => "<-", :layout => {:align => :center})
                             hori << @pages_number_label = label(:text => "Page:#{@pages_number}",
                                                                 :text_align => :center,
@@ -122,7 +122,7 @@ class WretchDL
                         @download_progress.hide
                         hori << @download_button = button(:title => 'Download', :layout => {:align => :center})
                     end
-                    view << @status_label = label(:text => "Downloading...", 
+                    view << @status_label = label(:text => "", 
                                                   :layout => {:start => false,
                                                               :align => :top,
                                                               :expand => [:width]})
@@ -135,7 +135,7 @@ class WretchDL
     end
 
 
-    def search_albums_list
+    def search_albums
         @wretch_id = @field.stringValue
         @pages_number = 1
         update_table
@@ -159,22 +159,30 @@ class WretchDL
         
         queue = Dispatch::Queue.new('com.lingdev.WretchDL.update_table_data')
         queue.async do
-            albums_info = WretchAlbumsInfo.new(@wretch_id)
-            @albums = albums_info.list_of_page(@pages_number)
-            
-            #@albums.each_with_index do |album, i|
-            #    puts "#{i}. #{album.name} (#{album.pictures}p)"
-            #end
+            begin
+                albums_info = WretchAlbumsInfo.new(@wretch_id)
+                @albums = albums_info.list_of_page(@pages_number)
+            rescue OpenURI::HTTPError => e
+                Dispatch::Queue.main.async do
+                    show_error_alert("#{e.message}")
+                end
+                return
+            rescue URI::InvalidURIError => e
+                Dispatch::Queue.main.async do
+                    show_error_alert("#{e.message}")
+                end
+                return
+            end
             
             Dispatch::Queue.main.async do
                 @table.reloadData
                 @table.deselectAll(self)
                 @download_button.enabled = false
-                @search_progress.stop
-                @search_progress.hide
                 @cover_image.setImage(nil)
                 @pictures_label.stringValue = "? pictures"
                 @pages_number_label.stringValue = "Page:#{@pages_number}"
+                @search_progress.stop
+                @search_progress.hide
                 
                 if @pages_number <= 1
                     if @page_up_button.isEnabled
@@ -186,7 +194,7 @@ class WretchDL
                     end
                 end
                 
-                if albums_info.next_page?
+                if albums_info.page_next?
                     if not @page_down_button.isEnabled
                         @page_down_button.enabled = true
                     end
@@ -201,54 +209,92 @@ class WretchDL
     
 
     def downloading
-        puts "Downloading..."
-        if @table.selectedRow != -1
-            i = @table.selectedRow
-            home_path = NSHomeDirectory()
-            dl_dir_path = File.join(home_path, 'Downloads', 'WretchAlbums', @albums[i].id, @albums[i].name)
-            make_dl_dir(dl_dir_path)
+        @is_downloading = !@is_downloading
+        
+        if @is_downloading
+            if @table.selectedRow != -1
+                t_row = @table.selectedRow
+                home_path = NSHomeDirectory()
+                dl_dir_path = File.join(home_path, 'Downloads', 'WretchAlbums', @albums[t_row].id, @albums[t_row].name)
+                make_dl_dir(dl_dir_path)
             
-            # start download files
-            @table.enabled = false
-            @download_button.title = "Stop!"
-            if not @download_progress.isIndeterminate
-                @download_progress.setIndeterminate(true)
-            end
-            @download_progress.show
-            @download_progress.start
-            
-            queue = Dispatch::Queue.new('com.lingdev.WretchDL.download_files')
-            queue.async do
-                urls = @albums[i].photos_urls
-                
-                Dispatch::Queue.main.async do
-                    @download_progress.minValue = 0.0
-                    @download_progress.maxValue = urls.size.to_f
-                    @download_progress.reset
-                    @download_progress.stop
-                    @download_progress.setIndeterminate(false)
+                @table.enabled = false
+                @go_button.enabled = false
+                if @page_up_button.isEnabled
+                    is_page_up_enabled = true
+                    # Off @page_up_button
+                    @page_up_button.enabled = false
+                else
+                    is_page_up_enabled = false
                 end
                 
-                urls.each_with_index do |photo_url, steps|
-                    file_url = photo_url.to_file_url
-                    if not file_url.empty?
-                        download_file(file_url, dl_dir_path)
-                        Dispatch::Queue.main.async do
-                            @download_progress.value = steps + 1
-                        end
+                if @page_down_button.isEnabled
+                    is_page_down_enabled = true
+                    # Off @page_down_button
+                    @page_down_button.enabled = false
+                else
+                    is_page_down_enabled = false
+                end
+                
+                max_steps = @albums[t_row].pictures
+                @status_label.stringValue = "Downloading... (0/#{max_steps})"
+                @download_button.title = "Stop!"
+                if not @download_progress.isIndeterminate
+                    @download_progress.setIndeterminate(true)
+                end
+                @download_progress.show
+                @download_progress.start
+                
+                queue = Dispatch::Queue.new('com.lingdev.WretchDL.download_files')
+                queue.async do
+                    urls = @albums[t_row].photos_urls
+                    
+                    # Update GUI
+                    Dispatch::Queue.main.async do
+                        @download_progress.minValue = 0.0
+                        @download_progress.maxValue = urls.size.to_f
+                        @download_progress.reset
+                        @download_progress.stop
+                        @download_progress.setIndeterminate(false)
                     end
-                    puts "sleep 1s"
-                    sleep 1
-                end
-                Dispatch::Queue.main.async do
-                    @download_progress.hide
-                    @table.enabled = true
-                    @download_button.title = "Download"
-                end
-            end
                 
+                    urls.each_with_index do |photo_url, index|
+                        file_url = photo_url.to_file_url
+                        if not file_url.empty?
+                            download_file(file_url, dl_dir_path)
+                            break if not @is_downloading
+                            
+                            # Update GUI
+                            Dispatch::Queue.main.async do
+                                steps = index + 1
+                                @download_progress.value = steps
+                                @status_label.stringValue = "Downloading... (#{steps}/#{max_steps})"
+                            end
+                        end
+                        sleep 1
+                    end
+                    # Update GUI
+                    Dispatch::Queue.main.async do
+                        @download_progress.hide
+                        @table.enabled = true
+                        @go_button.enabled = true
+                        
+                        @page_up_button.setEnabled(true) if is_page_up_enabled
+                        @page_down_button.setEnabled(true) if is_page_down_enabled
+                        @download_button.setEnabled(true) if not @download_button.isEnabled
+                        
+                        @is_downloading = false
+                        @download_button.title = "Download"
+                        @status_label.stringValue = "Downloaded to the ~/Downloads/WretchAlbums/"
+                    end
+                end 
+            end
+        else
+            @status_label.stringValue = "Stoping..."
+            @download_button.enabled = false
         end
     end
+    
     
     def download_file(file_url, dl_dir_path)
         file_url =~ %r!http://.+/(.+\.jpg)?.+!
@@ -274,7 +320,7 @@ class WretchDL
     end
     
     def make_dl_dir(dir_path)
-        puts "dl_dir: #{dir_path}"
+         #puts "dl_dir: #{dir_path}"
         FileUtils.mkdir_p(dir_path)
     end
     
@@ -288,21 +334,34 @@ class WretchDL
     
     def tableViewSelectionDidChange(notification)
         if @table.selectedRow != -1
-            i = @table.selectedRow
-            puts "selected row: #{i}"
+            t_row = @table.selectedRow
+            puts "selected row: #{t_row}"
             
-            if @albums[i].cover_url
-                img = NSImage.alloc.initWithContentsOfURL(NSURL.alloc.initWithString(@albums[i].cover_url))
+            if @albums[t_row].cover_url
+                img = NSImage.alloc.initWithContentsOfURL(NSURL.alloc.initWithString(@albums[t_row].cover_url))
                 @cover_image.setImage(img)
                 @cover_image.setImageScaling(NSImageScaleProportionallyUpOrDown)
             else
                 @cover_image.setImage(nil)
             end
-            @pictures_label.stringValue = "#{@albums[i].pictures} pictures"
+            @pictures_label.stringValue = "#{@albums[t_row].pictures} pictures"
             @download_button.enabled = true
         end 
     end
-
+    
+    def show_error_alert(message)
+        alert = NSAlert.alloc.init
+        alert.setMessageText("Error!")
+        alert.setInformativeText(message)
+        alert.beginSheetModalForWindow(@window, modalDelegate:self, didEndSelector:nil, contextInfo:nil)
+        @search_progress.stop
+        @search_progress.hide
+        
+        @albums.each_with_index do |album, index|
+            puts "#{index}: #{album.name} - #{album.id}"
+        end
+    end
+    
     # help menu item
     def on_help(menu)
     end
