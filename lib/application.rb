@@ -211,9 +211,8 @@ class WretchDL
                 end
                 return
             end
-            
+
             Dispatch::Queue.main.async do
-                puts "Update table..."
                 @table.reloadData
                 @table.deselectAll(self)
                 @download_button.enabled = false
@@ -302,7 +301,6 @@ class WretchDL
                         if not file_url.empty?
                             download_file(file_url, dl_dir_path)
                             break if not @is_downloading
-                            
                             # Update GUI
                             Dispatch::Queue.main.async do
                                 steps = index + 1
@@ -374,7 +372,7 @@ class WretchDL
     def tableViewSelectionDidChange(notification)
         if @table.selectedRow != -1
             t_row = @table.selectedRow
-            puts "selected row: #{t_row}"
+             #puts "selected row: #{t_row}"
             
             if @albums[t_row].cover_url
                 img = NSImage.alloc.initWithContentsOfURL(NSURL.alloc.initWithString(@albums[t_row].cover_url))
@@ -393,12 +391,8 @@ class WretchDL
         alert.setMessageText("Error!")
         alert.setInformativeText(message)
         alert.beginSheetModalForWindow(@window, modalDelegate:self, didEndSelector:nil, contextInfo:nil)
-        #@search_progress.stop
-        #@search_progress.hide
-        
-        @albums.each_with_index do |album, index|
-            puts "#{index}: #{album.name} - #{album.id}"
-        end
+        @search_progress.stop
+        @search_progress.hide
     end
     
     # help menu item
