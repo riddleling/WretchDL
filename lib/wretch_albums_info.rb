@@ -1,5 +1,5 @@
 #
-#  wretch_albums_info.rb
+#  wretch_albums_info.rb - The WretchDL Project
 #
 #
 #  Copyright (c) 2012 Wei-Chen Ling.
@@ -25,6 +25,7 @@
 #  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 #  OTHER DEALINGS IN THE SOFTWARE.
 #
+
 
 require 'open-uri'
 

@@ -1,3 +1,8 @@
+#
+#  menu.rb - The WretchDL Project
+#  
+#
+
 module HotCocoa
     def application_menu
         menu do |main|

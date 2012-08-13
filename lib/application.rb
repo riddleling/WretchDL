@@ -1,3 +1,32 @@
+#
+#  application.rb - The WretchDL Project
+#
+#
+#  Copyright (c) 2012 Wei-Chen Ling.
+# 
+#  Permission is hereby granted, free of charge, to any person
+#  obtaining a copy of this software and associated documentation
+#  files (the "Software"), to deal in the Software without
+#  restriction, including without limitation the rights to use,
+#  copy, modify, merge, publish, distribute, sublicense, and/or sell
+#  copies of the Software, and to permit persons to whom the
+#  Software is furnished to do so, subject to the following
+#  conditions:
+#
+#  The above copyright notice and this permission notice shall be
+#  included in all copies or substantial portions of the Software.
+#
+#  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+#  EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+#  OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+#  NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+#  HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+#  WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+#  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+#  OTHER DEALINGS IN THE SOFTWARE.
+#
+
+
 require 'rubygems' # disable this for a deployed application
 require 'hotcocoa'
 require 'fileutils'
@@ -10,8 +39,11 @@ class WretchDL
     include HotCocoa
 
     def initialize
+        @wretch_id = ""
+        @last_wretch_id = ""
         @albums = []
         @pages_number = 0
+        @last_pages_number = 0
         @is_downloading = false
     end
 
@@ -87,20 +119,20 @@ class WretchDL
                                                         :expand => [:width]}) do |hori|
                             hori.spacing = 0
                             hori.margin = 2
-                            hori << @page_up_button = button(:title => "<-", :layout => {:align => :center})
+                            hori << @previous_page_button = button(:title => "<-", :layout => {:align => :center})
                             hori << @pages_number_label = label(:text => "Page:#{@pages_number}",
                                                                 :text_align => :center,
                                                                 :layout => {:expand => [:width], :align => :top})
-                            hori << @page_down_button = button(:title => "->", :layout => {:align => :center})
+                            hori << @next_page_button = button(:title => "->", :layout => {:align => :center})
                         end
                     end
                 end
                 @table.dataSource = self
                 @table.delegate =self
-                @page_up_button.enabled = false
-                @page_down_button.enabled = false
-                @page_up_button.on_action { page_up }
-                @page_down_button.on_action { page_down }
+                @previous_page_button.enabled = false
+                @next_page_button.enabled = false
+                @previous_page_button.on_action { previous_page }
+                @next_page_button.on_action { next_page }
                 win << center_view
                 
                 
@@ -136,19 +168,21 @@ class WretchDL
 
 
     def search_albums
+        @last_wretch_id = @wretch_id
         @wretch_id = @field.stringValue
+        @last_pages_number = @pages_number
         @pages_number = 1
         update_table
     end
     
-    def page_up
+    def previous_page
         if @pages_number > 1
             @pages_number -= 1
             update_table
         end
     end
     
-    def page_down
+    def next_page
         @pages_number += 1
         update_table
     end
@@ -163,11 +197,15 @@ class WretchDL
                 albums_info = WretchAlbumsInfo.new(@wretch_id)
                 @albums = albums_info.list_of_page(@pages_number)
             rescue OpenURI::HTTPError => e
+                @wretch_id = @last_wretch_id
+                @pages_number = @last_pages_number
                 Dispatch::Queue.main.async do
                     show_error_alert("#{e.message}")
                 end
                 return
             rescue URI::InvalidURIError => e
+                @wretch_id = @last_wretch_id
+                @pages_number = @last_pages_number
                 Dispatch::Queue.main.async do
                     show_error_alert("#{e.message}")
                 end
@@ -175,6 +213,7 @@ class WretchDL
             end
             
             Dispatch::Queue.main.async do
+                puts "Update table..."
                 @table.reloadData
                 @table.deselectAll(self)
                 @download_button.enabled = false
@@ -185,22 +224,22 @@ class WretchDL
                 @search_progress.hide
                 
                 if @pages_number <= 1
-                    if @page_up_button.isEnabled
-                        @page_up_button.enabled = false
+                    if @previous_page_button.isEnabled
+                        @previous_page_button.enabled = false
                     end
                 else
-                    if not @page_up_button.isEnabled
-                        @page_up_button.enabled = true
+                    if not @previous_page_button.isEnabled
+                        @previous_page_button.enabled = true
                     end
                 end
                 
                 if albums_info.page_next?
-                    if not @page_down_button.isEnabled
-                        @page_down_button.enabled = true
+                    if not @next_page_button.isEnabled
+                        @next_page_button.enabled = true
                     end
                 else
-                    if @page_down_button.isEnabled
-                        @page_down_button.enabled = false
+                    if @next_page_button.isEnabled
+                        @next_page_button.enabled = false
                     end
                 end
             end
@@ -220,20 +259,20 @@ class WretchDL
             
                 @table.enabled = false
                 @go_button.enabled = false
-                if @page_up_button.isEnabled
-                    is_page_up_enabled = true
-                    # Off @page_up_button
-                    @page_up_button.enabled = false
+                if @previous_page_button.isEnabled
+                    is_previous_page_enabled = true
+                    # Off @previous_page_button
+                    @previous_page_button.enabled = false
                 else
-                    is_page_up_enabled = false
+                    is_previous_page_enabled = false
                 end
                 
-                if @page_down_button.isEnabled
-                    is_page_down_enabled = true
-                    # Off @page_down_button
-                    @page_down_button.enabled = false
+                if @next_page_button.isEnabled
+                    is_next_page_enabled = true
+                    # Off @next_page_button
+                    @next_page_button.enabled = false
                 else
-                    is_page_down_enabled = false
+                    is_next_page_enabled = false
                 end
                 
                 max_steps = @albums[t_row].pictures
@@ -279,8 +318,8 @@ class WretchDL
                         @table.enabled = true
                         @go_button.enabled = true
                         
-                        @page_up_button.setEnabled(true) if is_page_up_enabled
-                        @page_down_button.setEnabled(true) if is_page_down_enabled
+                        @previous_page_button.setEnabled(true) if is_previous_page_enabled
+                        @next_page_button.setEnabled(true) if is_next_page_enabled
                         @download_button.setEnabled(true) if not @download_button.isEnabled
                         
                         @is_downloading = false
@@ -315,7 +354,7 @@ class WretchDL
         task_status = task.terminationStatus
     
         if task_status != 0
-            puts "Download fail!"
+            puts "Download fail: #{file_url}"
         end
     end
     
@@ -354,8 +393,8 @@ class WretchDL
         alert.setMessageText("Error!")
         alert.setInformativeText(message)
         alert.beginSheetModalForWindow(@window, modalDelegate:self, didEndSelector:nil, contextInfo:nil)
-        @search_progress.stop
-        @search_progress.hide
+        #@search_progress.stop
+        #@search_progress.hide
         
         @albums.each_with_index do |album, index|
             puts "#{index}: #{album.name} - #{album.id}"
