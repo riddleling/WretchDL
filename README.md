@@ -8,23 +8,23 @@
 
 Mac OS X 10.6+ and 64bit Intel CPU
 
-## 使用
+## 編譯
 
-### 1. 安裝 Xcode 與 MacRuby
+1. 安裝 Xcode 與 MacRuby：
 
 請參考 [MacRuby Wiki](https://github.com/MacRuby/MacRuby/wiki/Setting-up-MacRuby)
 
-### 2. 安裝 HotCocoa
+2. 安裝 HotCocoa：
 
 執行終端機程式，輸入下列指令：
 
-    sudo macgem install hotcocoa
+        sudo macgem install hotcocoa
 
-### 3. 編譯與執行
+3. 編譯與執行：
 
 使用下列指令編譯與執行 WretchDL.app
 
-    macrake run
+        macrake run
 
 
 ## 軟體授權(License)
