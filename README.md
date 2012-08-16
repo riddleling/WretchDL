@@ -5,11 +5,9 @@
 ![image](http://farm9.staticflickr.com/8424/7782677716_8d36aec066_z.jpg)
 
 
-
 ## 系統需求
 
 Mac OS X 10.6+ and 64bit Intel CPU
-
 
 
 ## 編譯
@@ -31,7 +29,6 @@ Mac OS X 10.6+ and 64bit Intel CPU
         macrake run
 
    下載的相片會儲存到`~/Downloads/WretchAlbums/`目錄裡。
-
 
 
 ## 軟體授權 (License)

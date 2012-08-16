@@ -196,14 +196,7 @@ class WretchDL
             begin
                 albums_info = WretchAlbumsInfo.new(@wretch_id)
                 @albums = albums_info.list_of_page(@pages_number)
-            rescue OpenURI::HTTPError => e
-                @wretch_id = @last_wretch_id
-                @pages_number = @last_pages_number
-                Dispatch::Queue.main.async do
-                    show_error_alert("#{e.message}")
-                end
-                return
-            rescue URI::InvalidURIError => e
+            rescue OpenURI::HTTPError, URI::InvalidURIError => e
                 @wretch_id = @last_wretch_id
                 @pages_number = @last_pages_number
                 Dispatch::Queue.main.async do
@@ -223,23 +216,15 @@ class WretchDL
                 @search_progress.hide
                 
                 if @pages_number <= 1
-                    if @previous_page_button.isEnabled
-                        @previous_page_button.enabled = false
-                    end
+                    @previous_page_button.setEnabled(false) if @previous_page_button.isEnabled
                 else
-                    if not @previous_page_button.isEnabled
-                        @previous_page_button.enabled = true
-                    end
+                    @previous_page_button.setEnabled(true) if not @previous_page_button.isEnabled
                 end
                 
                 if albums_info.page_next?
-                    if not @next_page_button.isEnabled
-                        @next_page_button.enabled = true
-                    end
+                    @next_page_button.setEnabled(true) if not @next_page_button.isEnabled
                 else
-                    if @next_page_button.isEnabled
-                        @next_page_button.enabled = false
-                    end
+                    @next_page_button.setEnabled(false) if @next_page_button.isEnabled
                 end
             end
         end
@@ -277,16 +262,13 @@ class WretchDL
                 max_steps = @albums[t_row].pictures
                 @status_label.stringValue = "Downloading... (0/#{max_steps})"
                 @download_button.title = "Stop!"
-                if not @download_progress.isIndeterminate
-                    @download_progress.setIndeterminate(true)
-                end
+                @download_progress.setIndeterminate(true) if not @download_progress.isIndeterminate
                 @download_progress.show
                 @download_progress.start
                 
                 queue = Dispatch::Queue.new('com.lingdev.WretchDL.download_files')
                 queue.async do
                     urls = @albums[t_row].photos_urls
-                    
                     # Update GUI
                     Dispatch::Queue.main.async do
                         @download_progress.minValue = 0.0
@@ -295,20 +277,23 @@ class WretchDL
                         @download_progress.stop
                         @download_progress.setIndeterminate(false)
                     end
-                
-                    urls.each_with_index do |photo_url, index|
-                        file_url = photo_url.to_file_url
-                        if not file_url.empty?
-                            download_file(file_url, dl_dir_path)
-                            break if not @is_downloading
-                            # Update GUI
-                            Dispatch::Queue.main.async do
-                                steps = index + 1
-                                @download_progress.value = steps
-                                @status_label.stringValue = "Downloading... (#{steps}/#{max_steps})"
+                    
+                    catch :stop_download do
+                        urls.each_with_index do |photo_url, index|
+                            photo_url.to_fileurl_with_filename do |file_url, file_name|
+                                if not file_url.empty?
+                                    download_file(file_url, file_name, dl_dir_path)
+                                    throw :stop_download if not @is_downloading
+                                    # Update GUI
+                                    Dispatch::Queue.main.async do
+                                        steps = index + 1
+                                        @download_progress.value = steps
+                                        @status_label.stringValue = "Downloading... (#{steps}/#{max_steps})"
+                                    end
+                                end
+                                sleep 1
                             end
                         end
-                        sleep 1
                     end
                     # Update GUI
                     Dispatch::Queue.main.async do
@@ -333,9 +318,7 @@ class WretchDL
     end
     
     
-    def download_file(file_url, dl_dir_path)
-        file_url =~ %r!http://.+/(.+\.jpg)?.+!
-        file_name = $1
+    def download_file(file_url, file_name, dl_dir_path)
         referer_url = "http://www.wretch.cc/album/"
         # "curl --referer #{referer_url} '#{file_url}' -o #{file_name}"
     
@@ -357,8 +340,10 @@ class WretchDL
     end
     
     def make_dl_dir(dir_path)
-         #puts "dl_dir: #{dir_path}"
-        FileUtils.mkdir_p(dir_path)
+        unless File.exist?(dir_path) and File.directory?(dir_path)
+             #puts "mkdir: #{dir_path}"
+            FileUtils.mkdir_p(dir_path)
+        end
     end
     
     def numberOfRowsInTableView(view)

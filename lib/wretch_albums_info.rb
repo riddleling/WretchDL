@@ -41,8 +41,8 @@ class WretchPhotoURL
   
   def to_file_url
     page_html = open(@photo_url).read
-    
     file_url = ""
+    
     page_html.each_line do |line|
       if line =~ /<img id='DisplayImage' src='([^']+)' /
         file_url = Regexp.last_match[1]
@@ -51,6 +51,14 @@ class WretchPhotoURL
       end
     end
     file_url
+  end
+  
+  def to_fileurl_with_filename
+    file_url = to_file_url
+    file_url =~ %r!http://.+/(.+\.jpg)\?.+!
+    file_name = $1
+    yield file_url, file_name
+    return file_url, file_name
   end
 end
 
